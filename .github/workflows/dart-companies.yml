@@ -24,4 +24,4 @@ jobs:
               [ -f "$f" ] && { set -a; . "$f"; set +a; echo "✅ env loaded: $f"; break; }
             done
             cd ~/domains/quantnova.co.kr/nodejs/server
-            /opt/alt/alt-nodejs18/root/bin/node run-task.js dart-companies
+            /opt/alt/alt-nodejs18/root/bin/node run-task.js dart-companies > /dev/null 2>&1
