@@ -1,0 +1,27 @@
+name: 탈퇴 계정 정리
+
+on:
+  schedule:
+    - cron: '30 18 * * *'  # KST 03:30 매일
+  workflow_dispatch:
+
+jobs:
+  cleanup-accounts:
+    name: '탈퇴 계정 정리 (KST 03:30 매일)'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH — run-task.js cleanup-accounts
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: 65002
+          command_timeout: 5m
+          script: |
+            export TZ=Asia/Seoul
+            for f in ~/domains/*/public_html/.builds/config/.env; do
+              [ -f "$f" ] && { set -a; . "$f"; set +a; break; }
+            done
+            cd ~/domains/quantnova.co.kr/nodejs/server
+            /opt/alt/alt-nodejs18/root/bin/node run-task.js cleanup-accounts
