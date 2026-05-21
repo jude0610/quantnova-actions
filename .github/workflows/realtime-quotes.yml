@@ -1,0 +1,64 @@
+name: Realtime Quotes
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: realtime-quotes
+  cancel-in-progress: true
+
+jobs:
+  realtime-quotes:
+    name: '지연시세 수집 (KST 08:00~20:10, 15분 간격)'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dart-financial-collector
+        uses: actions/checkout@v4
+        with:
+          repository: jude0610/dart-financial-collector
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+        working-directory: server
+
+      - name: SSH 키 설정
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 종목 코드 조회 (SSH)
+        env:
+          SSH_USER: ${{ secrets.HOSTINGER_USER }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+        run: |
+          REMOTE_CMD='export TZ=Asia/Seoul; for f in ~/domains/*/public_html/.builds/config/.env; do [ -f "$f" ] && { set -a; . "$f"; set +a; break; }; done; /opt/alt/alt-nodejs18/root/bin/node ~/domains/quantnova.co.kr/nodejs/server/get-stock-codes.js'
+          ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$REMOTE_CMD" > /tmp/codes.json
+          echo "종목 수: $(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync("/tmp/codes.json","utf8")).length))')"
+
+      - name: LS증권 시세 수집
+        env:
+          LS_APP_KEY: ${{ secrets.LS_APP_KEY }}
+          LS_APP_SECRET: ${{ secrets.LS_APP_SECRET }}
+        run: node collect-and-push-quotes.js /tmp/codes.json > /tmp/quotes.json
+        working-directory: server
+
+      - name: DB 저장 (SSH pipe)
+        env:
+          SSH_USER: ${{ secrets.HOSTINGER_USER }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+        run: |
+          REMOTE_CMD='export TZ=Asia/Seoul; for f in ~/domains/*/public_html/.builds/config/.env; do [ -f "$f" ] && { set -a; . "$f"; set +a; break; }; done; /opt/alt/alt-nodejs18/root/bin/node ~/domains/quantnova.co.kr/nodejs/server/import-quotes.js'
+          cat /tmp/quotes.json | ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$REMOTE_CMD"
