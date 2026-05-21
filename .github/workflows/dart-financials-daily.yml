@@ -1,6 +1,5 @@
 name: DART 재무제표 수집
 
-
 on:
   schedule:
     - cron: '0 16 * * 1-5'  # KST 01:00 화~토
@@ -25,4 +24,4 @@ jobs:
               [ -f "$f" ] && { set -a; . "$f"; set +a; break; }
             done
             cd ~/domains/quantnova.co.kr/nodejs/server
-            /opt/alt/alt-nodejs18/root/bin/node run-task.js dart-financials-daily > /dev/null 2>&1
+            /opt/alt/alt-nodejs18/root/bin/node run-task.js dart-financials-daily
