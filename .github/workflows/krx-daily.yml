@@ -1,0 +1,25 @@
+name: KRX 일일 주가
+
+on:
+  workflow_dispatch:  # Hostinger krx-daily.sh 에서 dispatch
+
+jobs:
+  krx-daily:
+    name: 'KRX 일일 주가 (KST 08:30 화~토)'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH — run-task.js krx-daily
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: 65002
+          command_timeout: 90m
+          script: |
+            export TZ=Asia/Seoul
+            for f in ~/domains/*/public_html/.builds/config/.env; do
+              [ -f "$f" ] && { set -a; . "$f"; set +a; echo "✅ env loaded: $f"; break; }
+            done
+            cd ~/domains/quantnova.co.kr/nodejs/server
+            /opt/alt/alt-nodejs18/root/bin/node run-task.js krx-daily
