@@ -21,7 +21,7 @@ jobs:
           script: |
             export TZ=Asia/Seoul
             for f in ~/domains/*/public_html/.builds/config/.env; do
-              [ -f "$f" ] && { set -a; . "$f"; set +a; echo "✅ env loaded: $f"; break; }
+              [ -f "$f" ] && { set -a; . "$f"; set +a; break; }
             done
             cd ~/domains/quantnova.co.kr/nodejs/server
             /opt/alt/alt-nodejs18/root/bin/node run-task.js dart-financials-process > /dev/null 2>&1
