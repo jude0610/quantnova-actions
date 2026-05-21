@@ -1,0 +1,27 @@
+name: DART 기업정보
+
+on:
+  schedule:
+    - cron: '15 23 * * 1-5'  # KST 08:15 화~토
+  workflow_dispatch:
+
+jobs:
+  dart-companies:
+    name: 'DART 기업정보 (KST 08:15 화~토)'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH — run-task.js dart-companies
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: 65002
+          command_timeout: 140m
+          script: |
+            export TZ=Asia/Seoul
+            for f in ~/domains/*/public_html/.builds/config/.env; do
+              [ -f "$f" ] && { set -a; . "$f"; set +a; echo "✅ env loaded: $f"; break; }
+            done
+            cd ~/domains/quantnova.co.kr/nodejs/server
+            /opt/alt/alt-nodejs18/root/bin/node run-task.js dart-companies
