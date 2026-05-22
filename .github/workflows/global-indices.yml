@@ -51,9 +51,15 @@ jobs:
           SSH_USER: ${{ secrets.HOSTINGER_USER }}
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          # 체크아웃된 최신 import-global.js를 Hostinger에 직접 업로드 (배포 딜레이 우회)
-          scp -P 65002 -o BatchMode=yes server/import-global.js \
-            "$SSH_USER@$SSH_HOST:~/domains/quantnova.co.kr/nodejs/server/import-global.js"
-          # DB 저장 (TZ 설정 제거 — import-global.js가 toISOString()으로 UTC 명시)
-          REMOTE_CMD='for f in ~/domains/*/public_html/.builds/config/.env; do [ -f "$f" ] && { set -a; . "$f"; set +a; break; }; done; /opt/alt/alt-nodejs18/root/bin/node ~/domains/quantnova.co.kr/nodejs/server/import-global.js'
-          cat /tmp/global.json | ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$REMOTE_CMD"
+          # 체크아웃된 import-global.js를 base64로 인코딩 후 SSH로 전달
+          # → Hostinger 파일 상태(배포 타이밍, git reset 여부)와 완전히 무관
+          SCRIPT_B64=$(base64 -w 0 server/import-global.js)
+          DATA_B64=$(base64 -w 0 /tmp/global.json)
+          ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" "
+            for f in ~/domains/*/public_html/.builds/config/.env; do
+              [ -f \"\$f\" ] && { set -a; . \"\$f\"; set +a; break; }
+            done
+            echo '${SCRIPT_B64}' | base64 -d > /tmp/ig_run.js
+            echo '${DATA_B64}' | base64 -d | /opt/alt/alt-nodejs18/root/bin/node /tmp/ig_run.js
+            rm -f /tmp/ig_run.js
+          "
