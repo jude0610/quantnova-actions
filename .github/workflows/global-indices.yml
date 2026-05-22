@@ -60,6 +60,7 @@ jobs:
               [ -f \"\$f\" ] && { set -a; . \"\$f\"; set +a; break; }
             done
             echo '${SCRIPT_B64}' | base64 -d > /tmp/ig_run.js
+            cd ~/domains/quantnova.co.kr/nodejs/server
             echo '${DATA_B64}' | base64 -d | /opt/alt/alt-nodejs18/root/bin/node /tmp/ig_run.js
             rm -f /tmp/ig_run.js
           "
