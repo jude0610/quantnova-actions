@@ -39,14 +39,12 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 종목 코드 조회 (SSH)
+      - name: 종목 코드 조회
         env:
           SSH_USER: ${{ secrets.HOSTINGER_USER }}
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          REMOTE_CMD='export TZ=Asia/Seoul; for f in ~/domains/*/public_html/.builds/config/.env; do [ -f "$f" ] && { set -a; . "$f"; set +a; break; }; done; /opt/alt/alt-nodejs18/root/bin/node ~/domains/quantnova.co.kr/nodejs/server/get-stock-codes.js'
-          ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$REMOTE_CMD" > /tmp/codes.json
-          echo "종목 수: $(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync("/tmp/codes.json","utf8")).length))')"
+          ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh get-stock-codes' > /tmp/codes.json
 
       - name: LS증권 시세 수집
         env:
@@ -55,10 +53,9 @@ jobs:
         run: node collect-and-push-quotes.js /tmp/codes.json > /tmp/quotes.json
         working-directory: server
 
-      - name: DB 저장 (SSH pipe)
+      - name: DB 저장
         env:
           SSH_USER: ${{ secrets.HOSTINGER_USER }}
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          REMOTE_CMD='export TZ=Asia/Seoul; for f in ~/domains/*/public_html/.builds/config/.env; do [ -f "$f" ] && { set -a; . "$f"; set +a; break; }; done; /opt/alt/alt-nodejs18/root/bin/node ~/domains/quantnova.co.kr/nodejs/server/import-quotes.js'
-          cat /tmp/quotes.json | ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$REMOTE_CMD"
+          cat /tmp/quotes.json | ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh import-quotes'
