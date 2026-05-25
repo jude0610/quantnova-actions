@@ -46,10 +46,9 @@ jobs:
         run: node collect-and-push-global.js > /tmp/global.json
         working-directory: server
 
-      - name: DB 저장 (SSH pipe)
+      - name: DB 저장
         env:
           SSH_USER: ${{ secrets.HOSTINGER_USER }}
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          REMOTE_CMD='export TZ=Asia/Seoul; for f in ~/domains/*/public_html/.builds/config/.env; do [ -f "$f" ] && { set -a; . "$f"; set +a; break; }; done; /opt/alt/alt-nodejs18/root/bin/node ~/domains/quantnova.co.kr/nodejs/server/import-global.js'
-          cat /tmp/global.json | ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$REMOTE_CMD"
+          cat /tmp/global.json | ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh import-global'
