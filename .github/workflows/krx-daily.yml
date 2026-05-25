@@ -1,25 +1,21 @@
 name: KRX 일일 주가
 
 on:
-  workflow_dispatch:  # Hostinger krx-daily.sh 에서 dispatch
+  workflow_dispatch:
 
 jobs:
   krx-daily:
     name: 'KRX 일일 주가 (KST 08:30 화~토)'
     runs-on: ubuntu-latest
     steps:
-      - name: SSH — run-task.js krx-daily
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOSTINGER_HOST }}
-          username: ${{ secrets.HOSTINGER_USER }}
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: 65002
-          command_timeout: 90m
-          script: |
-            export TZ=Asia/Seoul
-            for f in ~/domains/*/public_html/.builds/config/.env; do
-              [ -f "$f" ] && { set -a; . "$f"; set +a; break; }
-            done
-            cd ~/domains/quantnova.co.kr/nodejs/server
-            /opt/alt/alt-nodejs18/root/bin/node run-task.js krx-daily
+      - name: Run task
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh krx-daily'
