@@ -2,7 +2,7 @@ name: Theme Sync
 
 # LS증권 테마 분류·종목 매핑 동기화 (주 1회 권장)
 # LS API는 Hostinger IP 차단 → GitHub Actions VM에서 수집 후 SSH pipe로 DB 저장.
-# t1532를 종목당 1.1초 간격으로 호출하므로 ~48분 소요.
+# t1532를 종목당 1.1초 간격(+HTTP 왕복)으로 호출 → 전체 ~2,600종목에 약 2시간 소요.
 
 on:
   workflow_dispatch:
@@ -16,9 +16,9 @@ concurrency:
 
 jobs:
   theme-sync:
-    name: 'LS 테마 동기화 (전체 종목 ~48분)'
+    name: 'LS 테마 동기화 (전체 종목 ~2시간)'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Checkout dart-financial-collector
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: 종목 코드 조회
         env:
