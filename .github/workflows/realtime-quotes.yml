@@ -29,24 +29,31 @@ jobs:
         run: npm ci --omit=dev
         working-directory: server
 
+      - name: SSH 키 설정
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
       - name: 종목 코드 조회
         env:
-          INTERNAL_API_TOKEN: ${{ secrets.INTERNAL_API_TOKEN }}
+          SSH_USER: ${{ secrets.HOSTINGER_USER }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          # SSH 대신 토큰 보호 HTTPS 엔드포인트로 조회 (Hostinger SSH 차단 우회).
-          # 브라우저 User-Agent 사용 (WAF가 기본 curl UA를 403으로 막는 경우 대비).
-          # 실패 시 상태코드+응답 본문을 출력해 원인(WAF 403 vs 앱 4xx/5xx) 진단.
-          http=$(curl -sS \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
-            --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 15 --max-time 60 \
-            -H "x-internal-token: $INTERNAL_API_TOKEN" \
-            -o /tmp/codes.json -w '%{http_code}' \
-            "https://quantnova.co.kr/api/internal/stock-codes")
-          echo "HTTP $http"
-          if [ "$http" -lt 200 ] || [ "$http" -ge 300 ]; then
-            echo "응답 본문(앞 1000자):"; head -c 1000 /tmp/codes.json; echo
-            exit 1
-          fi
+          # SSH 일시 연결 실패(exit 255) 대비 재시도 (최대 3회, 백오프)
+          for attempt in 1 2 3; do
+            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh get-stock-codes' > /tmp/codes.json; then
+              exit 0
+            fi
+            echo "SSH attempt $attempt failed, retrying in $((attempt * 5))s..." >&2
+            sleep $((attempt * 5))
+          done
+          echo "SSH failed after 3 attempts" >&2
+          exit 1
 
       - name: LS증권 시세 수집
         env:
@@ -57,15 +64,17 @@ jobs:
 
       - name: DB 저장
         env:
-          INTERNAL_API_TOKEN: ${{ secrets.INTERNAL_API_TOKEN }}
+          SSH_USER: ${{ secrets.HOSTINGER_USER }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          http=$(curl -sS \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
-            --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 15 --max-time 120 \
-            -H "x-internal-token: $INTERNAL_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data-binary @/tmp/quotes.json \
-            -o /tmp/resp.txt -w '%{http_code}' \
-            "https://quantnova.co.kr/api/internal/import-quotes")
-          echo "HTTP $http"; cat /tmp/resp.txt; echo
-          if [ "$http" -lt 200 ] || [ "$http" -ge 300 ]; then exit 1; fi
+          # SSH 일시 연결 실패(exit 255) 대비 재시도 (최대 3회, 백오프). 재시도 시
+          # 입력을 다시 읽도록 파이프 대신 파일 리다이렉트(< 파일) 사용
+          for attempt in 1 2 3; do
+            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh import-quotes' < /tmp/quotes.json; then
+              exit 0
+            fi
+            echo "SSH attempt $attempt failed, retrying in $((attempt * 5))s..." >&2
+            sleep $((attempt * 5))
+          done
+          echo "SSH failed after 3 attempts" >&2
+          exit 1
