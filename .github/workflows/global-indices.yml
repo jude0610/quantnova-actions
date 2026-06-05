@@ -41,9 +41,14 @@ jobs:
           INTERNAL_API_TOKEN: ${{ secrets.INTERNAL_API_TOKEN }}
         run: |
           # SSH 대신 토큰 보호 HTTPS 엔드포인트로 저장 (Hostinger SSH 차단 우회).
-          curl -fsS --retry 3 --retry-delay 5 --retry-all-errors \
-            --connect-timeout 15 --max-time 60 \
+          # 브라우저 User-Agent + 상태코드/본문 출력으로 WAF 403 등 진단.
+          http=$(curl -sS \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
+            --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 15 --max-time 60 \
             -H "x-internal-token: $INTERNAL_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data-binary @/tmp/global.json \
-            "https://quantnova.co.kr/api/internal/import-global"
+            -o /tmp/resp.txt -w '%{http_code}' \
+            "https://quantnova.co.kr/api/internal/import-global")
+          echo "HTTP $http"; cat /tmp/resp.txt; echo
+          if [ "$http" -lt 200 ] || [ "$http" -ge 300 ]; then exit 1; fi
