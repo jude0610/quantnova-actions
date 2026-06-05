@@ -51,4 +51,14 @@ jobs:
           SSH_USER: ${{ secrets.HOSTINGER_USER }}
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          cat /tmp/market.json | ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh import-market'
+          # SSH 일시 연결 실패(exit 255) 대비 재시도 (최대 3회, 백오프). 재시도 시
+          # 입력을 다시 읽도록 파이프 대신 파일 리다이렉트(< 파일) 사용
+          for attempt in 1 2 3; do
+            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh import-market' < /tmp/market.json; then
+              exit 0
+            fi
+            echo "SSH attempt $attempt failed, retrying in $((attempt * 5))s..." >&2
+            sleep $((attempt * 5))
+          done
+          echo "SSH failed after 3 attempts" >&2
+          exit 1
