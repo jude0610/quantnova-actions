@@ -29,31 +29,17 @@ jobs:
         run: npm ci --omit=dev
         working-directory: server
 
-      - name: SSH 키 설정
-        env:
-          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
-          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-
       - name: 종목 코드 조회
         env:
-          SSH_USER: ${{ secrets.HOSTINGER_USER }}
-          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          INTERNAL_API_TOKEN: ${{ secrets.INTERNAL_API_TOKEN }}
         run: |
-          # SSH 일시 연결 실패(exit 255) 대비 재시도 (최대 3회, 백오프)
-          for attempt in 1 2 3; do
-            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh get-stock-codes' > /tmp/codes.json; then
-              exit 0
-            fi
-            echo "SSH attempt $attempt failed, retrying in $((attempt * 5))s..." >&2
-            sleep $((attempt * 5))
-          done
-          echo "SSH failed after 3 attempts" >&2
-          exit 1
+          # SSH 대신 토큰 보호 HTTPS 엔드포인트로 조회 (Hostinger SSH 차단 우회).
+          # curl 자체 재시도(--retry)로 일시 오류 자동 회복.
+          curl -fsS --retry 3 --retry-delay 5 --retry-all-errors \
+            --connect-timeout 15 --max-time 60 \
+            -H "x-internal-token: $INTERNAL_API_TOKEN" \
+            "$APP_BASE_URL/api/internal/stock-codes" -o /tmp/codes.json
 
       - name: LS증권 시세 수집
         env:
@@ -64,17 +50,12 @@ jobs:
 
       - name: DB 저장
         env:
-          SSH_USER: ${{ secrets.HOSTINGER_USER }}
-          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          INTERNAL_API_TOKEN: ${{ secrets.INTERNAL_API_TOKEN }}
         run: |
-          # SSH 일시 연결 실패(exit 255) 대비 재시도 (최대 3회, 백오프). 재시도 시
-          # 입력을 다시 읽도록 파이프 대신 파일 리다이렉트(< 파일) 사용
-          for attempt in 1 2 3; do
-            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh import-quotes' < /tmp/quotes.json; then
-              exit 0
-            fi
-            echo "SSH attempt $attempt failed, retrying in $((attempt * 5))s..." >&2
-            sleep $((attempt * 5))
-          done
-          echo "SSH failed after 3 attempts" >&2
-          exit 1
+          curl -fsS --retry 3 --retry-delay 5 --retry-all-errors \
+            --connect-timeout 15 --max-time 120 \
+            -H "x-internal-token: $INTERNAL_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/quotes.json \
+            "$APP_BASE_URL/api/internal/import-quotes"
