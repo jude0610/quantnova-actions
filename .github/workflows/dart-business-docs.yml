@@ -1,0 +1,61 @@
+name: DART 사업보고서(사업개요) 수집
+
+# 사업개요(company_business_overview)는 기업 상세 페이지의 프리렌더 본문과
+# AI 한줄평의 원천 데이터인데, 지금까지 스케줄이 없어 수동 실행에만 의존했다.
+# 그래서 신규 상장·새 사업보고서가 자동으로 들어오지 않았다.
+#
+# 주기를 주 1회로 잡은 이유: 사업보고서는 12월 결산 기준 3월 말에 몰려 제출되는
+# 연 1회 데이터다. --resume(증분)이라 평소엔 신규 상장분 몇 건만 처리하고 끝난다.
+#
+# ⚠️ --resume 판정 기준은 사업개요 보유 여부다(load-raw-dart-business-docs.js 참조).
+#    사업보고서가 없거나 개요 파싱이 안 되는 종목은 매 실행 재시도되지만,
+#    현재 그 규모가 ~95종목이라 주 1회 기준으로 무시할 수준이다.
+
+on:
+  schedule:
+    # 매주 일요일 KST 03:00 = 토요일 UTC 18:00
+    # (일일 잡들이 도는 화~토 새벽 시간대를 피해 주말에 배치)
+    - cron: '0 18 * * 6'
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: '시작 사업연도 (비우면 올해)'
+        required: false
+        type: string
+      end_year:
+        description: '종료 사업연도 (비우면 올해)'
+        required: false
+        type: string
+      resume:
+        description: '증분 수집(이미 사업개요가 있는 종목 건너뜀)'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  dart-business-docs:
+    name: '사업개요 수집 (KST 일 03:00, 증분)'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run task
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USER }}
+          START_YEAR: ${{ inputs.start_year }}
+          END_YEAR: ${{ inputs.end_year }}
+          # 스케줄 실행(inputs 없음)은 항상 증분
+          RESUME: ${{ github.event_name == 'schedule' && 'true' || inputs.resume }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ARGS=""
+          [ -n "$START_YEAR" ] && ARGS="$ARGS --start-year=$START_YEAR"
+          [ -n "$END_YEAR" ]   && ARGS="$ARGS --end-year=$END_YEAR"
+          [ "$RESUME" = "true" ] && ARGS="$ARGS --resume"
+
+          ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" \
+            "bash ~/domains/*/nodejs/server/scripts/qn-task.sh dart-business-docs$ARGS"
