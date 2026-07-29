@@ -57,5 +57,6 @@ jobs:
           [ -n "$END_YEAR" ]   && ARGS="$ARGS --end-year=$END_YEAR"
           [ "$RESUME" = "true" ] && ARGS="$ARGS --resume"
 
-          ssh -p 65002 -o BatchMode=yes "$SSH_USER@$SSH_HOST" \
+          # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
+          ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" \
             "bash ~/domains/*/nodejs/server/scripts/qn-task.sh dart-business-docs$ARGS"
