@@ -53,7 +53,7 @@ jobs:
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
           # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
-          ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh get-stock-codes' > /tmp/codes.json
+          ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh get-stock-codes' > /tmp/codes.json
 
       - name: LS증권 테마 수집
         env:
@@ -68,4 +68,4 @@ jobs:
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
           # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
-          cat /tmp/themes.json | ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh import-themes'
+          cat /tmp/themes.json | ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh import-themes'

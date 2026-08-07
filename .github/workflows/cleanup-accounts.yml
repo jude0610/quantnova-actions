@@ -21,4 +21,4 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
-          ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/nodejs/server/scripts/qn-task.sh cleanup-accounts'
+          ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh cleanup-accounts'
