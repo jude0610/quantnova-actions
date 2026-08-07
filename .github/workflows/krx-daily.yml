@@ -17,6 +17,12 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # ssh-keyscan이 순간적으로 실패하면(네트워크 hiccup 등) known_hosts를 못 채워서
+          # GitHub Actions 기본 셸(-e)이 여기서 조용히(출력 없이) 죽는다 — 짧게 재시도해서 흡수한다.
+          for i in 1 2 3; do
+            ssh-keyscan -p 65002 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null && break
+            echo "⚠️  ssh-keyscan 실패 (시도 $i/3)" >&2
+            sleep 3
+          done
           # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
           ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh krx-daily'
