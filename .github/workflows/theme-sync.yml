@@ -52,8 +52,23 @@ jobs:
           SSH_USER: ${{ secrets.HOSTINGER_USER }}
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
-          ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh get-stock-codes' > /tmp/codes.json
+          # 접속 실패(exit 255)만 재시도한다 — 2026-08-15 이 잡도 `Connection timed out`
+          # 한 방에 통째로 실패했다. 재시도 없이 단발로 쏘면 하루치가 그대로 날아간다.
+          for attempt in 1 2 3 4 5; do
+            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh get-stock-codes' > /tmp/codes.json; then
+              exit 0
+            fi
+            rc=$?
+            if [ "$rc" -ne 255 ]; then
+              echo "❌ 원격 작업 실패 (exit $rc) — 재시도하지 않습니다" >&2
+              exit "$rc"
+            fi
+            [ "$attempt" -eq 5 ] && break
+            echo "⚠️  SSH 접속 실패 (시도 $attempt/5) — $((attempt * 30))초 뒤 재시도" >&2
+            sleep $((attempt * 30))
+          done
+          echo "❌ SSH 접속 5회 연속 실패" >&2
+          exit 1
 
       - name: LS증권 테마 수집
         env:
@@ -67,5 +82,20 @@ jobs:
           SSH_USER: ${{ secrets.HOSTINGER_USER }}
           SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
         run: |
-          # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
-          cat /tmp/themes.json | ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh import-themes'
+          # 접속 실패(exit 255)만 재시도한다 — 2026-08-15 이 잡도 `Connection timed out`
+          # 한 방에 통째로 실패했다. 재시도 없이 단발로 쏘면 하루치가 그대로 날아간다.
+          for attempt in 1 2 3 4 5; do
+            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh import-themes' < /tmp/themes.json; then
+              exit 0
+            fi
+            rc=$?
+            if [ "$rc" -ne 255 ]; then
+              echo "❌ 원격 작업 실패 (exit $rc) — 재시도하지 않습니다" >&2
+              exit "$rc"
+            fi
+            [ "$attempt" -eq 5 ] && break
+            echo "⚠️  SSH 접속 실패 (시도 $attempt/5) — $((attempt * 30))초 뒤 재시도" >&2
+            sleep $((attempt * 30))
+          done
+          echo "❌ SSH 접속 5회 연속 실패" >&2
+          exit 1

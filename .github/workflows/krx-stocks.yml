@@ -27,4 +27,26 @@ jobs:
             sleep 3
           done
           # 무출력 구간이 길면 NAT/방화벽이 유휴 연결을 끊는다(Broken pipe, exit 255) → keepalive 전송
-          ssh -p 65002 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh krx-stocks'
+          # 접속 자체가 실패하면 그날 수집이 통째로 날아간다 — 재시도한다.
+          # 2026-08-15: 일일 잡 4개가 같은 날 `Connection timed out`으로 전멸했다.
+          # 15분 잡은 Oracle 고정 IP + 3회 재시도를 갖고 있는데, 일일 잡은 GitHub
+          # 호스티드 회전 IP라 차단·경로 문제에 더 노출되면서도 재시도가 없어
+          # **1회 실패 = 하루치 결손**이었다. 다음 실행까지 24시간이므로 백오프를
+          # 넉넉히 준다(30·60·90·120초).
+          for attempt in 1 2 3 4 5; do
+            if ssh -p 65002 -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$SSH_USER@$SSH_HOST" 'bash ~/domains/*/qn-current/server/scripts/qn-task.sh krx-stocks'; then
+              exit 0
+            fi
+            rc=$?
+            # 255 = SSH 계층 실패(접속 타임아웃·세션 끊김). 그 외 코드는 원격 작업
+            # 자체가 실패한 것이므로 재시도하지 않고 그대로 드러낸다.
+            if [ "$rc" -ne 255 ]; then
+              echo "❌ 원격 작업 실패 (exit $rc) — 재시도하지 않습니다" >&2
+              exit "$rc"
+            fi
+            [ "$attempt" -eq 5 ] && break
+            echo "⚠️  SSH 접속 실패 (시도 $attempt/5) — $((attempt * 30))초 뒤 재시도" >&2
+            sleep $((attempt * 30))
+          done
+          echo "❌ SSH 접속 5회 연속 실패 — 작업을 시작하지 못했습니다" >&2
+          exit 1
