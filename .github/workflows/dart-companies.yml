@@ -1,8 +1,8 @@
 name: DART 기업정보
 
 on:
-  schedule:
-    - cron: '15 23 * * 1-5'
+  # 정시 실행은 Hostinger 크론(server/cron-scripts/dispatch-public.sh)이 workflow_dispatch 로 깨운다.
+  #   GitHub 내장 schedule 은 매일 2~4시간 늦어 뺐다(2026-10-29).
   workflow_dispatch:
 
 jobs:
